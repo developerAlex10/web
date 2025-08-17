@@ -1,16 +1,29 @@
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+
+import static common.СonfigConstants.*;
 
 public class Main {
-    private static final int PORT = 9999;
-    private static final int THREAD_POOL_SIZE = 64;
-    private static final List<String> VALID_PATHS = List.of(
-            "/index.html", "/spring.svg", "/spring.png", "/resources.html",
-            "/styles.css", "/app.js", "/links.html", "/forms.html",
-            "/classic.html", "/events.html", "/events.js"
-    );
-
     public static void main(String[] args) {
-        Server server = new Server(PORT, THREAD_POOL_SIZE, VALID_PATHS);
-        server.start();
+        final var server = new Server();
+
+        server.addHandler("GET", "/messages", (request, out) -> {
+            String responseBody = "GET messages";
+            String response = server.buildResponse(OK_STATUS, TEXT_PLAIN, responseBody);
+            out.write(response.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        });
+
+        server.addHandler("POST", "/messages", (request, out) -> {
+            String body = new String(request.getBody().readAllBytes(), StandardCharsets.UTF_8);
+            String responseBody = "POST messages: " + body;
+            String response = server.buildResponse(
+                    OK_STATUS,
+                    TEXT_PLAIN,
+                    responseBody);
+            out.write(response.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        });
+
+        server.listen(DEFAULT_PORT);
     }
 }
