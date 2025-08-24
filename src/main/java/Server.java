@@ -1,8 +1,11 @@
+import org.apache.http.NameValuePair;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -27,14 +30,12 @@ public class Server {
                 .put(path, handler);
     }
 
-    public void listen(int port) {
+    public void listen(int port) throws IOException {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             while (true) {
                 Socket socket = serverSocket.accept();
                 threadPool.submit(() -> handleConnection(socket));
             }
-        } catch (IOException e) {
-            e.printStackTrace();
         } finally {
             threadPool.shutdown();
         }
@@ -46,42 +47,10 @@ public class Server {
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 BufferedOutputStream out = new BufferedOutputStream(socket.getOutputStream())
         ) {
-            String requestLine = in.readLine();
-            String[] requestParts = requestLine.split(" ");
-            if (requestParts.length != 3) {
-                return;
-            }
+            Request request = parseRequest(in);
+            if (request == null) return;
 
-            String method = requestParts[0];
-            String path = requestParts[1];
-
-            Map<String, String> headers = new HashMap<>();
-            String headerLine;
-            while (!(headerLine = in.readLine()).isEmpty()) {
-                int separator = headerLine.indexOf(HEADER_SEPARATOR);
-                if (separator > 0) {
-                    String key = headerLine.substring(0, separator).trim();
-                    String value = headerLine.substring(separator + HEADER_SEPARATOR.length()).trim();
-                    headers.put(key, value);
-                }
-            }
-
-            InputStream bodyStream = InputStream.nullInputStream();
-            if (headers.containsKey(CONTENT_LENGTH_HEADER)) {
-                int contentLength = Integer.parseInt(headers.get(CONTENT_LENGTH_HEADER));
-                if (contentLength > 0) {
-                    bodyStream = new ByteArrayInputStream(in.readLine().getBytes(StandardCharsets.UTF_8));
-                }
-            }
-
-            Request request = Request.builder()
-                    .method(method)
-                    .path(path)
-                    .headers(headers)
-                    .body(bodyStream)
-                    .build();
-
-            Handler handler = findHandler(method, path);
+            Handler handler = findHandler(request.getMethod(), request.getPathWithoutQuery());
             if (handler != null) {
                 handler.handle(request, out);
             } else {
@@ -92,8 +61,48 @@ public class Server {
         }
     }
 
+    private Request parseRequest(BufferedReader in) throws IOException {
+        String requestLine = in.readLine();
+        if (requestLine == null || requestLine.isEmpty()) return null;
+
+        String[] requestParts = requestLine.split(" ");
+        if (requestParts.length != 3) return null;
+
+        String method = requestParts[0];
+        String path = requestParts[1];
+        List<NameValuePair> queryParams = Request.parseQuery(path);
+
+        Map<String, String> headers = new HashMap<>();
+        String headerLine;
+        while (!(headerLine = in.readLine()).isEmpty()) {
+            int separator = headerLine.indexOf(HEADER_SEPARATOR);
+            if (separator > 0) {
+                String key = headerLine.substring(0, separator).trim();
+                String value = headerLine.substring(separator + HEADER_SEPARATOR.length()).trim();
+                headers.put(key, value);
+            }
+        }
+
+        InputStream bodyStream = InputStream.nullInputStream();
+        if (headers.containsKey(CONTENT_LENGTH_HEADER)) {
+            int contentLength = Integer.parseInt(headers.get(CONTENT_LENGTH_HEADER));
+            if (contentLength > 0) {
+                bodyStream = new ByteArrayInputStream(in.readLine().getBytes(StandardCharsets.UTF_8));
+            }
+        }
+
+        return Request.builder()
+                .method(method)
+                .path(path)
+                .headers(headers)
+                .body(bodyStream)
+                .queryParams(queryParams)
+                .build();
+    }
+
     private Handler findHandler(String method, String path) {
         Map<String, Handler> methodHandlers = handlers.get(method.toUpperCase());
+        if (methodHandlers == null) return null;
         return methodHandlers.get(path);
     }
 
