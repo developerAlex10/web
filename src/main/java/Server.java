@@ -63,8 +63,6 @@ public class Server {
 
     private Request parseRequest(BufferedReader in) throws IOException {
         String requestLine = in.readLine();
-        if (requestLine == null || requestLine.isEmpty()) return null;
-
         String[] requestParts = requestLine.split(" ");
         if (requestParts.length != 3) return null;
 
@@ -102,7 +100,6 @@ public class Server {
 
     private Handler findHandler(String method, String path) {
         Map<String, Handler> methodHandlers = handlers.get(method.toUpperCase());
-        if (methodHandlers == null) return null;
         return methodHandlers.get(path);
     }
 

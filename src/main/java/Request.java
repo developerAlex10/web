@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static common.СonfigConstants.QUERY_SEPARATOR;
 import static org.apache.http.Consts.UTF_8;
